@@ -80,10 +80,29 @@ final class RenameEngine {
         
         let directory = (path as NSString).deletingLastPathComponent
         let newPath = (directory as NSString).appendingPathComponent(nfcFilename)
+
+        // rename은 부모 디렉토리 쓰기 권한이 필요. 소유자(read-only) 폴더는 u+w를 임시 부여 후 원복.
+        var restoredDirectoryPermissions: NSNumber?
+        do {
+            restoredDirectoryPermissions = try makeDirectoryWritableIfNeeded(directory)
+        } catch {
+            recordHistory(path: path, filename: filename, newFilename: nfcFilename, result: .skipped, reason: SkipReason.permissionDenied.description)
+            return .skipped(reason: .permissionDenied)
+        }
+        defer {
+            if let original = restoredDirectoryPermissions {
+                try? FileManager.default.setAttributes([.posixPermissions: original.intValue], ofItemAtPath: directory)
+            }
+        }
+
+        if !FileManager.default.isWritableFile(atPath: directory) {
+            recordHistory(path: path, filename: filename, newFilename: nfcFilename, result: .skipped, reason: SkipReason.permissionDenied.description)
+            return .skipped(reason: .permissionDenied)
+        }
         
         // 대상 파일 존재 확인
         if FileManager.default.fileExists(atPath: newPath) {
-            // Allow canonical-equivalent paths to point to the same file.
+            // Canonical-equivalent paths can refer to the same file.
             if !isSameFile(path, newPath) {
                 recordHistory(path: path, filename: filename, newFilename: nfcFilename, result: .conflict, reason: "대상 파일 존재")
                 return .skipped(reason: .targetExists)
@@ -106,6 +125,11 @@ final class RenameEngine {
             recordHistory(path: path, filename: filename, newFilename: nfcFilename, result: .success, reason: nil)
             return .success(oldPath: path, newPath: newPath)
         } catch {
+            if isPermissionDenied(error) {
+                recordHistory(path: path, filename: filename, newFilename: nfcFilename, result: .skipped, reason: SkipReason.permissionDenied.description)
+                return .skipped(reason: .permissionDenied)
+            }
+
             recordHistory(path: path, filename: filename, newFilename: nfcFilename, result: .failed, reason: error.localizedDescription)
             return .failed(error: error)
         }
@@ -158,12 +182,12 @@ final class RenameEngine {
     // MARK: - Low-level rename
 
     private func renameItem(atPath oldPath: String, toPath newPath: String) throws {
-        // Prefer POSIX rename(2) for canonical-equivalent rename.
+        // Prefer POSIX rename(2).
         if Darwin.rename(oldPath, newPath) == 0 {
             return
         }
 
-        // Fallback for cross-device moves
+        // Cross-device moves
         let code = errno
         if code == EXDEV {
             try FileManager.default.moveItem(atPath: oldPath, toPath: newPath)
@@ -174,6 +198,48 @@ final class RenameEngine {
             throw POSIXError(posix)
         }
         throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+    }
+
+    private func makeDirectoryWritableIfNeeded(_ directory: String) throws -> NSNumber? {
+        guard !FileManager.default.isWritableFile(atPath: directory) else { return nil }
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: directory)
+
+        // 소유자만 자동 권한 변경 (다른 사용자/시스템 경로는 건드리지 않음)
+        if let ownerID = attrs[.ownerAccountID] as? NSNumber {
+            guard ownerID.intValue == Int(getuid()) else { return nil }
+        } else {
+            return nil
+        }
+
+        guard let perms = attrs[.posixPermissions] as? NSNumber else { return nil }
+        let current = perms.intValue
+        let desired = current | Int(S_IWUSR)
+        guard desired != current else { return nil }
+
+        try FileManager.default.setAttributes([.posixPermissions: desired], ofItemAtPath: directory)
+        return perms
+    }
+
+    private func isPermissionDenied(_ error: Error) -> Bool {
+        if let posix = error as? POSIXError {
+            switch posix.code {
+            case .EACCES, .EPERM:
+                return true
+            default:
+                return false
+            }
+        }
+
+        let ns = error as NSError
+        if ns.domain == NSPOSIXErrorDomain {
+            return ns.code == Int(EACCES) || ns.code == Int(EPERM)
+        }
+        if ns.domain == NSCocoaErrorDomain {
+            return ns.code == CocoaError.fileWriteNoPermission.rawValue
+                || ns.code == CocoaError.fileReadNoPermission.rawValue
+        }
+        return false
     }
 
     private func isSameFile(_ a: String, _ b: String) -> Bool {

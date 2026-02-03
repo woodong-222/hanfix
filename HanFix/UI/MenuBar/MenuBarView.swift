@@ -32,9 +32,18 @@ struct MenuBarView: View {
             
             // 액션 버튼들
             ActionButtonsSection(
-                onOpenManualFix: { openWindow(id: "manual-fix") },
-                onOpenHistory: { openWindow(id: "history") },
-                onOpenSettings: { openWindow(id: "settings") }
+                onOpenManualFix: {
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    openWindow(id: "manual-fix")
+                },
+                onOpenHistory: {
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    openWindow(id: "history")
+                },
+                onOpenSettings: {
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    openWindow(id: "settings")
+                }
             )
             
             Divider()

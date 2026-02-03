@@ -122,16 +122,16 @@ struct ManualFixView: View {
     private func loadFiles() {
         isLoading = true
         errorMessage = nil
-        
-        Task {
+
+        DispatchQueue.global(qos: .utility).async {
             do {
                 let files = try ServiceCoordinator.shared.getNFDFiles(limit: 500)
-                await MainActor.run {
+                DispatchQueue.main.async {
                     nfdFiles = files
                     isLoading = false
                 }
             } catch {
-                await MainActor.run {
+                DispatchQueue.main.async {
                     errorMessage = error.localizedDescription
                     isLoading = false
                 }
@@ -154,15 +154,15 @@ struct ManualFixView: View {
             .filter { selectedFiles.contains($0.id) }
             .map { $0.path }
         
-        Task {
+        DispatchQueue.global(qos: .utility).async {
             let results = ServiceCoordinator.shared.convertFiles(paths)
             let successCount = results.filter { $0.result.isSuccess }.count
-            
-            await MainActor.run {
+
+            DispatchQueue.main.async {
                 isConverting = false
                 selectedFiles.removeAll()
                 loadFiles()
-                
+
                 if successCount > 0 {
                     // 성공 알림 (선택적)
                 }
@@ -172,11 +172,11 @@ struct ManualFixView: View {
     
     private func convertAll() {
         isConverting = true
-        
-        Task {
+
+        DispatchQueue.global(qos: .utility).async {
             ServiceCoordinator.shared.convertAllNFDFiles()
-            
-            await MainActor.run {
+
+            DispatchQueue.main.async {
                 isConverting = false
                 loadFiles()
             }
@@ -191,6 +191,8 @@ struct NFDFileRow: View {
     let isSelected: Bool
     
     var body: some View {
+        let original = file.isNFD ? UnicodeNormalizer.renderDecomposedHangul(file.filename) : file.filename
+
         HStack {
             // 선택 체크박스 (시각적)
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -203,7 +205,7 @@ struct NFDFileRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 // 파일명
                 HStack(spacing: 4) {
-                    Text(file.filename)
+                    Text(original)
                         .font(.body)
                         .lineLimit(1)
                     

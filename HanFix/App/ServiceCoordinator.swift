@@ -200,7 +200,15 @@ final class ServiceCoordinator {
                 let nfdFiles = try fileRepository.findNFDFiles(limit: 200, offset: 0)
                 if nfdFiles.isEmpty { break }
                 let paths = nfdFiles.map { $0.path }
-                _ = convertFiles(paths)
+                let results = convertFiles(paths)
+
+                let successCount = results.filter { $0.result.isSuccess }.count
+                if successCount == 0 {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.appState.setError("권한/충돌 등의 이유로 변환할 수 없는 파일이 남아 있습니다. (예: 폴더가 읽기 전용)")
+                    }
+                    break
+                }
                 safetyCounter += 1
             }
             
@@ -228,5 +236,13 @@ final class ServiceCoordinator {
     /// 오래된 히스토리 정리
     func cleanupOldHistory(olderThanDays days: Int = 30) {
         try? historyRepository.deleteOlderThan(days: days)
+    }
+
+    func cleanupOldHistoryReturningCount(olderThanDays days: Int = 30) -> Int {
+        (try? historyRepository.deleteOlderThanReturningCount(days: days)) ?? 0
+    }
+
+    func deleteAllHistory() -> Int {
+        (try? historyRepository.deleteAll()) ?? 0
     }
 }

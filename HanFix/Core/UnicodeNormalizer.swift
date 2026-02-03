@@ -16,7 +16,6 @@ enum UnicodeNormalizer {
     /// - Parameter string: 검사할 문자열
     /// - Returns: NFD 형태이면 true
     static func isNFD(_ string: String) -> Bool {
-        // Swift String equality uses canonical equivalence; compare scalars to detect NFD.
         let nfc = string.precomposedStringWithCanonicalMapping
         return !string.unicodeScalars.elementsEqual(nfc.unicodeScalars)
     }
@@ -44,6 +43,32 @@ enum UnicodeNormalizer {
     /// - Returns: NFC로 정규화된 문자열
     static func toNFC(_ string: String) -> String {
         return string.precomposedStringWithCanonicalMapping
+    }
+
+    static func renderDecomposedHangul(_ string: String) -> String {
+        var result = ""
+        var previousWasJamo = false
+
+        for scalar in string.unicodeScalars {
+            let isJamo = isHangulJamo(scalar.value)
+            if previousWasJamo && isJamo {
+                result.append(" ")
+            }
+            result.unicodeScalars.append(scalar)
+            previousWasJamo = isJamo
+        }
+
+        return result
+    }
+
+    private static func isHangulJamo(_ value: UInt32) -> Bool {
+        // Hangul Jamo
+        if (0x1100...0x11FF).contains(value) { return true }
+        // Hangul Jamo Extended-A
+        if (0xA960...0xA97F).contains(value) { return true }
+        // Hangul Jamo Extended-B
+        if (0xD7B0...0xD7FF).contains(value) { return true }
+        return false
     }
     
     /// 파일명만 NFC로 변환한 URL 반환

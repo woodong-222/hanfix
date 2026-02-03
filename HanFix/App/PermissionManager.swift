@@ -31,7 +31,7 @@ final class PermissionManager {
     /// Full Disk Access 권한 확인
     /// - Note: 시스템 보호 디렉토리에 접근 가능한지 테스트하여 권한 유무 판단
     func checkFullDiskAccess() {
-        // Heuristic check (no public API): try reading/listing protected paths.
+        // 시스템에 공개된 단일 판별 API가 없어, 보호 경로 접근 가능 여부로 추정한다.
 
         let candidateFiles = [
             NSHomeDirectory() + "/Library/Application Support/com.apple.TCC/TCC.db",

@@ -206,13 +206,12 @@ final class EventWatcher {
     // MARK: - 이벤트 병합
     
     private func addPendingEvent(_ event: FileSystemEvent) {
-        // FSEvents 콜백은 workQueue에서 호출되므로, 메인 스레드로 이벤트를 넘기지 않는다.
-        // (전체 디스크 감시 시 이벤트가 폭주하면 메인 스레드가 막혀 UI가 멈출 수 있음)
+        // 이벤트 병합은 workQueue에서 처리한다.
 
         // 같은 경로의 이벤트는 최신 것으로 덮어쓰기
         pendingEvents[event.path] = event
 
-        // 딜레이 후 한 번에 처리 (Timer 대신 DispatchWorkItem 사용)
+        // 딜레이 후 한 번에 처리
         coalesceWorkItem?.cancel()
         let workItem = DispatchWorkItem { [weak self] in
             self?.processPendingEvents()

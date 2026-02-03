@@ -15,6 +15,8 @@ struct HistoryView: View {
     @State private var historyItems: [RenameHistoryItem] = []
     @State private var isLoading = true
     @State private var selectedFilter: HistoryFilter = .all
+    @State private var showCleanupDialog = false
+    @State private var cleanupMessage: String?
     
     var body: some View {
         NavigationStack {
@@ -56,11 +58,19 @@ struct HistoryView: View {
                     Spacer()
                     
                     Button("히스토리 정리") {
-                        cleanupHistory()
+                        showCleanupDialog = true
                     }
                     .buttonStyle(.bordered)
                 }
                 .padding()
+
+                if let message = cleanupMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                }
             }
             .navigationTitle("최근 작업")
             .toolbar {
@@ -80,6 +90,17 @@ struct HistoryView: View {
         .frame(width: 600, height: 500)
         .onAppear {
             loadHistory()
+        }
+        .confirmationDialog("히스토리 정리", isPresented: $showCleanupDialog, titleVisibility: .visible) {
+            Button("7일 이전 삭제") {
+                cleanupHistory(olderThanDays: 7)
+            }
+            Button("전체 삭제", role: .destructive) {
+                deleteAllHistory()
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text("원하는 정리 방식을 선택하세요.")
         }
     }
     
@@ -102,25 +123,40 @@ struct HistoryView: View {
     
     private func loadHistory() {
         isLoading = true
-        
-        Task {
+
+        DispatchQueue.global(qos: .utility).async {
             do {
                 let items = try ServiceCoordinator.shared.getRecentHistory(limit: 100)
-                await MainActor.run {
+                DispatchQueue.main.async {
                     historyItems = items
                     isLoading = false
                 }
             } catch {
-                await MainActor.run {
+                DispatchQueue.main.async {
                     isLoading = false
                 }
             }
         }
     }
     
-    private func cleanupHistory() {
-        ServiceCoordinator.shared.cleanupOldHistory(olderThanDays: 7)
-        loadHistory()
+    private func cleanupHistory(olderThanDays days: Int) {
+        DispatchQueue.global(qos: .utility).async {
+            let deleted = ServiceCoordinator.shared.cleanupOldHistoryReturningCount(olderThanDays: days)
+            DispatchQueue.main.async {
+                cleanupMessage = "삭제됨: \(deleted)개"
+                loadHistory()
+            }
+        }
+    }
+
+    private func deleteAllHistory() {
+        DispatchQueue.global(qos: .utility).async {
+            let deleted = ServiceCoordinator.shared.deleteAllHistory()
+            DispatchQueue.main.async {
+                cleanupMessage = "삭제됨: \(deleted)개"
+                loadHistory()
+            }
+        }
     }
 }
 
@@ -148,6 +184,10 @@ struct HistoryItemRow: View {
     let item: RenameHistoryItem
     
     var body: some View {
+        let original = UnicodeNormalizer.isNFD(item.originalFilename)
+            ? UnicodeNormalizer.renderDecomposedHangul(item.originalFilename)
+            : item.originalFilename
+
         HStack {
             // 결과 아이콘
             Image(systemName: item.resultIcon)
@@ -157,7 +197,7 @@ struct HistoryItemRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 // 파일명 변환
                 HStack(spacing: 4) {
-                    Text(item.originalFilename)
+                    Text(original)
                         .font(.body)
                         .lineLimit(1)
                     

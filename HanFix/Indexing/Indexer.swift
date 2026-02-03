@@ -61,7 +61,7 @@ final class Indexer {
     /// 진행 상황 콜백
     var onProgressUpdate: ((IndexingProgress) -> Void)?
 
-    /// 진행 상황 업데이트 최소 간격 (초) - 메인 스레드 과부하 방지
+    /// 진행 상황 업데이트 최소 간격 (초)
     private let progressUpdateInterval: TimeInterval = 0.25
     private var lastProgressUpdateAt: Date = .distantPast
     

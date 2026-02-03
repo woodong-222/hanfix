@@ -222,12 +222,24 @@ final class RenameHistoryRepository {
     
     /// 오래된 히스토리 삭제 (정리)
     func deleteOlderThan(days: Int) throws {
+        _ = try deleteOlderThanReturningCount(days: days)
+    }
+
+    func deleteOlderThanReturningCount(days: Int) throws -> Int {
         try database.perform {
             let sql = """
                 DELETE FROM rename_history
                 WHERE created_at < datetime('now', '-\(days) days')
             """
             try database.execute(sql)
+            return Int(sqlite3_changes(database.db))
+        }
+    }
+
+    func deleteAll() throws -> Int {
+        try database.perform {
+            try database.execute("DELETE FROM rename_history")
+            return Int(sqlite3_changes(database.db))
         }
     }
     
