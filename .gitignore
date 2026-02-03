@@ -132,3 +132,11 @@ iOSInjectionProject/
 **/xcshareddata/WorkspaceSettings.xcsettings
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,xcode,swift
+
+# Environment variables (credentials)
+.env
+.env.example
+
+### OpenCode / LLM ###
+.sisyphus/
+AGENTS.md
